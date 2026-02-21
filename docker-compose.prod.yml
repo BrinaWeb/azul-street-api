@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: azul_nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - ./uploads:/app/uploads:ro
+    depends_on:
+      - api
+    networks:
+      - azul_network
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: azul_api
+    restart: always
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://postgres:${DB_PASSWORD}@db:5432/azulstreet
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - ./uploads:/app/uploads
+    networks:
+      - azul_network
+
+  db:
+    image: postgres:15-alpine
+    container_name: azul_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: azulstreet
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - azul_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: azul_cache
+    restart: always
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    networks:
+      - azul_network
+
+  backup:
+    image: postgres:15-alpine
+    container_name: azul_backup
+    depends_on:
+      - db
+    volumes:
+      - ./backups:/backups
+    environment:
+      PGPASSWORD: ${DB_PASSWORD}
+    entrypoint: |
+      sh -c 'while true; do
+        pg_dump -h db -U postgres azulstreet > /backups/backup_$$(date +%Y%m%d_%H%M%S).sql
+        find /backups -name "*.sql" -mtime +7 -delete
+        sleep 86400
+      done'
+    networks:
+      - azul_network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  azul_network:
+    driver: bridge
