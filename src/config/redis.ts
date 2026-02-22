@@ -6,12 +6,7 @@ const createRedisClient = () => {
   
   if (redisUrl) {
     console.log('[Redis] Connecting to Upstash...');
-    return new Redis(redisUrl, {
-      maxRetriesPerRequest: 3,
-      retryDelayOnFailover: 100,
-      enableReadyCheck: false,
-      lazyConnect: false,
-    });
+    return new Redis(redisUrl);
   }
   
   // Only use localhost in development
