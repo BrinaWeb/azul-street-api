@@ -2,8 +2,11 @@ import multer from 'multer';
 import sharp from 'sharp';
 import path from 'path';
 import fs from 'fs';
-import { v4 as uuidv4 } from 'uuid';
+import crypto from 'crypto';
 import logger from '../config/logger';
+
+// Função para gerar UUID usando crypto nativo
+const uuidv4 = () => crypto.randomUUID();
 
 // Diretório de uploads
 const UPLOAD_DIR = path.join(process.cwd(), 'uploads');
